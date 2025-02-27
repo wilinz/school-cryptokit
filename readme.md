@@ -11,5 +11,5 @@ cargo install --force cbindgen
 ```
 
 ```shell
-cbindgen --config cbindgen.toml --crate hubcrypto --output hubcrypto.h
+cbindgen --config cbindgen.toml --crate guethubcrypto --output guethubcrypto.h
 ```
