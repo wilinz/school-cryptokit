@@ -1,0 +1,15 @@
+[package]
+name = "guethubcrypto"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "guethubcrypto"
+crate-type = ["cdylib"]  # 生成动态链接库
+
+[dependencies]
+hex = "0.4"
+lazy_static = "1.5.0"
+openssl = "0.10.71"
+rand = "0.9.0"
+base64 = "0.22.1"
