@@ -1,17 +1,41 @@
 mod myencrypt;
 
+use crate::myencrypt::{get_web_vpn_ordinary_url, get_web_vpn_url};
+use myencrypt::{decrypt_aes_128_cbc_64prefix, encrypt_aes_128_cbc_64prefix};
+
 fn main() {
-    let key = "000102030405060708090a0b0c0d0e0f"; // 16 字节密钥（32 字符十六进制）
-    let password = "my_secret_password";
+    let vpnkey = b"wrdvpnisthebest!";
+    let vpniv = b"wrdvpnisthebest!";
 
-    // 加密
-    let encrypted = myencrypt::encrypt_aes_128_cbc_64prefix(password, key);
-    println!("Encrypted: {}", encrypted);
+    let urls = vec![
+        "https://bkjw.guet.edu.cn",
+        "https://cas.guet.edu.cn",
+        "https://v.guet.edu.cn",
+        "https://bkjwtest.guet.edu.cn",
+        "https://bkjwsrv.guet.edu.cn",
+        "https://classroom.guet.edu.cn",
+        "https://yjapp.guet.edu.cn",
+        "https://pcportal.guet.edu.cn",
+        "https://www.guet.edu.cn",    // 图书馆
+        "http://202.193.70.166:8020", // 数据库导航
+    ];
+    for url in urls {
+        let encrypt_url = get_web_vpn_url(
+            url,
+            vpnkey,
+            vpniv,
+            "https://v.guet.edu.cn",
+        );
+        println!("enc url: {}", &encrypt_url);
+        let decrypt_url = get_web_vpn_ordinary_url(&encrypt_url, vpnkey, vpniv);
+        println!("dec url: {}", &decrypt_url);
+    }
 
-    // 解密
-    let decrypted = myencrypt::decrypt_aes_128_cbc_64prefix(&encrypted, key);
-    println!("Decrypted: {}", decrypted);
-
-    // 验证解密结果
-    assert_eq!(password, decrypted);
+    for i in 0..10 {
+        let key = rand::random::<[u8; 16]>();
+        let enc = encrypt_aes_128_cbc_64prefix("hello world", &key);
+        println!("{}", enc);
+        let dec = decrypt_aes_128_cbc_64prefix(&enc, &key);
+        println!("{}", &dec);
+    }
 }

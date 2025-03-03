@@ -1,57 +1,27 @@
 use base64::Engine;
 use hex::{self, decode as hex_decode, encode as hex_encode};
-use lazy_static::lazy_static;
 use openssl::symm::{decrypt, encrypt, Cipher};
 use rand::distr::Alphanumeric;
 use rand::{rng, Rng};
-use std::sync::Mutex;
 
-lazy_static! {
-    static ref KEY: Mutex<[u8; 16]> = Mutex::new(*b"wrdvpnisthebest!");
-    static ref IV: Mutex<[u8; 16]> = Mutex::new(*b"wrdvpnisthebest!");
-    static ref VPN_HOST: Mutex<String> = Mutex::new("v.guet.edu.cn".to_string());
-}
-
-pub fn set_vpn_host(host: &str) {
-    let mut vpn_host = VPN_HOST.lock().unwrap();
-    *vpn_host = host.to_string();
-}
-
-pub fn set_host_encrypt_key(key0: &[u8]) {
-    let mut key = KEY.lock().unwrap();
-    if key0.len() != 16 {
-        panic!("Key must be 16 bytes");
-    }
-    key.copy_from_slice(key0);
-}
-
-pub fn set_host_encrypt_iv(iv0: &[u8]) {
-    let mut iv = IV.lock().unwrap();
-    if iv0.len() != 16 {
-        panic!("IV must be 16 bytes");
-    }
-    iv.copy_from_slice(iv0);
-}
-
-pub fn get_encrypt_host(plaintext: &str) -> String {
-    let key = KEY.lock().unwrap();
-    let iv_val = IV.lock().unwrap();
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_encrypt_host(plaintext: &str, key: &[u8], iv: &[u8]) -> String {
     let cipher = Cipher::aes_128_cfb128();
-    let encrypted = encrypt(cipher, &key[..], Some(&iv_val[..]), plaintext.as_bytes())
-        .expect("Encryption failed");
+    let encrypted =
+        encrypt(cipher, key, Some(iv), plaintext.as_bytes()).expect("Encryption failed");
     hex_encode(encrypted)
 }
 
-pub fn get_decrypt_host(ciphertext: &str) -> String {
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_decrypt_host(ciphertext: &str, key: &[u8], iv: &[u8]) -> String {
     let ct = hex_decode(ciphertext).expect("Invalid hex");
-    let key = KEY.lock().unwrap();
-    let iv_val = IV.lock().unwrap();
     let cipher = Cipher::aes_128_cfb128();
-    let decrypted = decrypt(cipher, &key[..], Some(&iv_val[..]), &ct).expect("Decryption failed");
+    let decrypted = decrypt(cipher, key, Some(iv), &ct).expect("Decryption failed");
     String::from_utf8(decrypted).expect("Invalid UTF-8")
 }
 
-pub fn get_vpn_url(url: &str) -> String {
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_web_vpn_url(url: &str, key: &[u8], iv: &[u8], vpn_base_url: &str) -> String {
     let parts: Vec<&str> = url.splitn(2, "://").collect();
     if parts.len() < 2 {
         return String::new();
@@ -72,17 +42,17 @@ pub fn get_vpn_url(url: &str) -> String {
         None => (host_part, String::new()),
     };
 
-    let cph = get_encrypt_host(domain);
-    let key_hex = hex_encode(&*IV.lock().unwrap());
+    let cph = get_encrypt_host(domain, key, iv);
+    let iv_hex = hex_encode(iv);
 
-    let vpn_host = VPN_HOST.lock().unwrap();
     format!(
-        "https://{}/{}{}/{}{}/{}",
-        *vpn_host, pro, port_suffix, key_hex, cph, fold_part
+        "{}/{}{}/{}{}/{}",
+        vpn_base_url, pro, port_suffix, iv_hex, cph, fold_part
     )
 }
 
-pub fn get_ordinary_url(url: &str) -> String {
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_web_vpn_ordinary_url(url: &str, key: &[u8], iv: &[u8]) -> String {
     let parts: Vec<&str> = url.split('/').collect();
     if parts.len() < 5 {
         return String::new();
@@ -90,43 +60,38 @@ pub fn get_ordinary_url(url: &str) -> String {
     let pro = parts[3];
     let key_cph = parts[4];
 
-    let hex_iv = hex_encode(&*IV.lock().unwrap());
+    let hex_iv = hex_encode(iv);
 
-    if key_cph.starts_with(&hex_iv) {
+    if key_cph.len() >= 16 && &key_cph[..16] == &hex_iv {
         if key_cph.len() >= 32 {
-            println!("{}", &key_cph[..32]);
+            println!("error: key_cph: {}", &key_cph[..32]);
         }
-        return String::new();
-    }
-
-    if key_cph.len() < 32 {
-        return String::new();
-    }
-
-    let encrypted_host = &key_cph[32..];
-    let hostname = get_decrypt_host(encrypted_host);
-
-    let pro_parts: Vec<&str> = pro.splitn(2, '-').collect();
-    let (protocol, port) = if pro_parts.len() > 1 {
-        (pro_parts[0], format!(":{}", pro_parts[1]))
-    } else {
-        (pro_parts[0], String::new())
-    };
-
-    let fold = if parts.len() > 5 {
-        parts[5..].join("/")
-    } else {
         String::new()
-    };
-
-    format!("{}://{}{}/{}", protocol, hostname, port, fold)
+    } else {
+        if key_cph.len() < 32 {
+            return String::new();
+        }
+        let encrypted_host = &key_cph[32..];
+        let hostname = get_decrypt_host(encrypted_host, key, iv);
+        let fold = if parts.len() > 5 {
+            parts[5..].join("/")
+        } else {
+            String::new()
+        };
+        let pro_parts: Vec<&str> = pro.splitn(2, '-').collect();
+        let (protocol, port) = if pro_parts.len() > 1 {
+            (pro_parts[0], format!(":{}", pro_parts[1]))
+        } else {
+            (pro_parts[0], String::new())
+        };
+        format!("{}://{}{}/{}", protocol, hostname, port, fold)
+    }
 }
 
+#[flutter_rust_bridge::frb(sync)]
 // 加密函数
-pub fn encrypt_aes_128_cbc_64prefix(plain: &str, key: &str) -> String {
-    // 将密钥转换为字节数组
-    let key_bytes = key.as_bytes();
-    if key_bytes.len() != 16 && key_bytes.len() != 24 && key_bytes.len() != 32 {
+pub fn encrypt_aes_128_cbc_64prefix(plain: &str, key: &[u8]) -> String {
+    if key.len() != 16 && key.len() != 24 && key.len() != 32 {
         panic!("Key must be 16, 24, or 32 bytes long");
     }
 
@@ -148,16 +113,16 @@ pub fn encrypt_aes_128_cbc_64prefix(plain: &str, key: &str) -> String {
     // 使用 AES-CBC 加密
     let cipher = Cipher::aes_128_cbc(); // 根据密钥长度选择 AES-128/192/256
     let encrypted =
-        encrypt(cipher, &key_bytes, Some(&iv), plaintext.as_bytes()).expect("Encryption failed");
+        encrypt(cipher, &key, Some(&iv), plaintext.as_bytes()).expect("Encryption failed");
 
     base64::engine::general_purpose::STANDARD.encode(&encrypted)
 }
 
+#[flutter_rust_bridge::frb(sync)]
 // 解密函数
-pub fn decrypt_aes_128_cbc_64prefix(encrypted_base64: &str, key: &str) -> String {
+pub fn decrypt_aes_128_cbc_64prefix(encrypted_base64: &str, key: &[u8]) -> String {
     // 将密钥转换为字节数组
-    let key_bytes = key.as_bytes();
-    if key_bytes.len() != 16 && key_bytes.len() != 24 && key_bytes.len() != 32 {
+    if key.len() != 16 && key.len() != 24 && key.len() != 32 {
         panic!("Key must be 16, 24, or 32 bytes long");
     }
 
@@ -172,7 +137,7 @@ pub fn decrypt_aes_128_cbc_64prefix(encrypted_base64: &str, key: &str) -> String
 
     // 使用 AES-CBC 解密
     let cipher = Cipher::aes_128_cbc(); // 根据密钥长度选择 AES-128/192/256
-    let decrypted = decrypt(cipher, &key_bytes, Some(&iv), &encrypted_data)
+    let decrypted = decrypt(cipher, &key, Some(&iv), &encrypted_data)
         .expect("Decryption failed")
         .split_off(64);
 
@@ -181,4 +146,10 @@ pub fn decrypt_aes_128_cbc_64prefix(encrypted_base64: &str, key: &str) -> String
 
     // 提取原始密码（去掉前面的 64 字节随机字符串）
     decrypted_str
+}
+
+#[flutter_rust_bridge::frb(init)]
+pub fn init_app() {
+    // Default utilities - feel free to customize
+    flutter_rust_bridge::setup_default_user_utils();
 }
