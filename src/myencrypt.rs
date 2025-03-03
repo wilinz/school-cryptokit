@@ -5,7 +5,7 @@ use rand::distr::Alphanumeric;
 use rand::{rng, Rng};
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_encrypt_host(plaintext: &str, key: &[u8], iv: &[u8]) -> String {
+pub fn get_encrypt_web_vpn_host(plaintext: &str, key: &[u8], iv: &[u8]) -> String {
     let cipher = Cipher::aes_128_cfb128();
     let encrypted =
         encrypt(cipher, key, Some(iv), plaintext.as_bytes()).expect("Encryption failed");
@@ -13,7 +13,7 @@ pub fn get_encrypt_host(plaintext: &str, key: &[u8], iv: &[u8]) -> String {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_decrypt_host(ciphertext: &str, key: &[u8], iv: &[u8]) -> String {
+pub fn get_decrypt_web_vpn_host(ciphertext: &str, key: &[u8], iv: &[u8]) -> String {
     let ct = hex_decode(ciphertext).expect("Invalid hex");
     let cipher = Cipher::aes_128_cfb128();
     let decrypted = decrypt(cipher, key, Some(iv), &ct).expect("Decryption failed");
@@ -42,7 +42,7 @@ pub fn get_web_vpn_url(url: &str, key: &[u8], iv: &[u8], vpn_base_url: &str) -> 
         None => (host_part, String::new()),
     };
 
-    let cph = get_encrypt_host(domain, key, iv);
+    let cph = get_encrypt_web_vpn_host(domain, key, iv);
     let iv_hex = hex_encode(iv);
 
     format!(
@@ -72,7 +72,7 @@ pub fn get_web_vpn_ordinary_url(url: &str, key: &[u8], iv: &[u8]) -> String {
             return String::new();
         }
         let encrypted_host = &key_cph[32..];
-        let hostname = get_decrypt_host(encrypted_host, key, iv);
+        let hostname = get_decrypt_web_vpn_host(encrypted_host, key, iv);
         let fold = if parts.len() > 5 {
             parts[5..].join("/")
         } else {
