@@ -1,6 +1,7 @@
 # 学校统一认证登录密码加解密（AES/CBC/PCks5）以及 WebVpn 加解密（AES/CFB）的 rust 库
 
 ## 密码加解密原理
+疑问：为啥 IV 可以随机，因为 IV 是用来偏移第一个加密块的，第二个以及后面的加密块不会收到IV影响即可正常解密，因为偏移的规则是后一个块使用前一个块当中它的"IV"，第一个块才用到传入的 IV, 所以即使 IV 不对只会解不出第一个块而已，后面的块并不会受到影响，所以咱们把前 64 个填充字节去掉就可以了
 ```rust
 // 加密函数
 pub fn encrypt_aes_128_cbc_64prefix(plain: &str, key: &[u8]) -> String {
@@ -50,7 +51,7 @@ pub fn decrypt_aes_128_cbc_64prefix(encrypted_base64: &str, key: &[u8]) -> Strin
     let cipher = Cipher::aes_128_cbc(); // 根据密钥长度选择 AES-128/192/256
     let decrypted = decrypt(cipher, &key, Some(&iv), &encrypted_data)
         .expect("Decryption failed")
-        .split_off(64);
+        .split_off(64); // 去掉填充的64字节
 
     // 将解密结果转换为字符串
     let decrypted_str = String::from_utf8(decrypted).expect("Invalid UTF-8");
