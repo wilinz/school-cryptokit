@@ -1,7 +1,4 @@
-mod myencrypt;
-
-use crate::myencrypt::{get_web_vpn_ordinary_url, get_web_vpn_url};
-use myencrypt::{decrypt_aes_128_cbc_64prefix, encrypt_aes_128_cbc_64prefix};
+use schoolcryptokit::api::myencrypt::{decrypt_aes_128_cbc_64prefix, encrypt_aes_128_cbc_64prefix, get_web_vpn_ordinary_url, get_web_vpn_url};
 
 fn main() {
     let vpnkey = b"wrdvpnisthebest!";
